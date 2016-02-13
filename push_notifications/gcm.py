@@ -6,7 +6,6 @@ https://developer.android.com/google/gcm/index.html
 """
 
 import json
-from .models import GCMDevice
 
 
 try:
@@ -78,21 +77,6 @@ def _gcm_send_plain(registration_id, data, **kwargs):
 	# If second line starts with registration_id, gets its value and replace the registration tokens in your
 	# server database. Otherwise, get the value of Error
 
-	if result.startswith("id"):
-		lines = result.split("\n")
-		if len(lines) > 1 and lines[1].startswith("registration_id"):
-			new_id = lines[1].split("=")[-1]
-			_gcm_handle_canonical_id(new_id, registration_id)
-
-	elif result.startswith("Error="):
-		if result in ("Error=NotRegistered", "Error=InvalidRegistration"):
-			# Deactivate the problematic device
-			device = GCMDevice.objects.filter(registration_id=values["registration_id"])
-			device.update(active=0)
-			return result
-
-		raise GCMError(result)
-
 	return result
 
 
@@ -136,26 +120,9 @@ def _gcm_send_json(registration_ids, data, **kwargs):
 			if new_id:
 				old_new_ids.append((registration_ids[index], new_id))
 
-		if ids_to_remove:
-			removed = GCMDevice.objects.filter(registration_id__in=ids_to_remove)
-			removed.update(active=0)
-
-		for old_id, new_id in old_new_ids:
-			_gcm_handle_canonical_id(new_id, old_id)
-
 		if throw_error:
 			raise GCMError(response)
 	return response
-
-
-def _gcm_handle_canonical_id(canonical_id, current_id):
-	"""
-	Handle situation when GCM server response contains canonical ID
-	"""
-	if GCMDevice.objects.filter(registration_id=canonical_id, active=True).exists():
-		GCMDevice.objects.filter(registration_id=current_id).update(active=False)
-	else:
-		GCMDevice.objects.filter(registration_id=current_id).update(registration_id=canonical_id)
 
 
 def gcm_send_message(registration_id, data, **kwargs):
